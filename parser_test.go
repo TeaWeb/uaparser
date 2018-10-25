@@ -1,7 +1,8 @@
 package uaparser
 
 import (
-	"log"
+	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 	"time"
@@ -41,17 +42,20 @@ func TestParser_Parse_Cost(t *testing.T) {
 	}
 
 	before := time.Now()
-	agent, found := p.Parse("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36")
-	cost := time.Since(before).Seconds()
+	//agent, found := p.Parse("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36")
 
-	if !found {
-		t.Log("not found")
-	} else {
-		log.Printf("%#v,\n %#v, \n %#v", agent.Browser, agent.OS, agent.Device)
+	count := 100000
+	p.cacheMaxSize = 50000
+	for i := 0; i < count; i ++ {
+		r := rand.Int()
+		p.Parse("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36 " + fmt.Sprintf("%d", r%12000))
 	}
 
+	cost := time.Since(before).Seconds()
+
 	t.Log("cost:", cost)
-	t.Log("qps:", 1/cost)
+	t.Log("qps:", float64(count)/cost)
+	t.Log("cached:", len(p.cacheMap))
 }
 
 func TestParser_Keywords(t *testing.T) {

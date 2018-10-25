@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 )
 
 var replacementReg = regexp.MustCompile(`\$\d`)
@@ -27,6 +28,10 @@ type Parser struct {
 	browserKeywords map[string][]interface{} // keyword => [ reg, spec ]
 	osKeywords      map[string][]interface{} // keyword => [ reg, spec ]
 	deviceKeywords  map[string][]interface{} // keyword => [ reg, spec ]
+
+	cacheMaxSize int
+	cacheMap     map[string]*UserAgent
+	cacheLocker  *sync.Mutex
 }
 
 func NewParser(path string) (*Parser, error) {
@@ -39,6 +44,10 @@ func NewParser(path string) (*Parser, error) {
 		browserKeywords: map[string][]interface{}{},
 		osKeywords:      map[string][]interface{}{},
 		deviceKeywords:  map[string][]interface{}{},
+
+		cacheMaxSize: 100000,
+		cacheMap:     map[string]*UserAgent{},
+		cacheLocker:  &sync.Mutex{},
 	}
 
 	err := p.init()
@@ -116,7 +125,21 @@ func (this *Parser) init() (err error) {
 	return nil
 }
 
+func (this *Parser) SetCacheMaxSize(maxSize int) {
+	this.cacheMaxSize = maxSize
+}
+
 func (this *Parser) Parse(userAgentString string) (userAgent *UserAgent, found bool) {
+	// try to read from cache
+	this.cacheLocker.Lock()
+	cachedResult, ok := this.cacheMap[userAgentString]
+	if ok {
+		this.cacheLocker.Unlock()
+		return cachedResult, true
+	}
+	this.cacheLocker.Unlock()
+
+	// parse
 	browser, found := this.ParseBrowser(userAgentString)
 	if !found {
 		return nil, false
@@ -128,12 +151,45 @@ func (this *Parser) Parse(userAgentString string) (userAgent *UserAgent, found b
 	os, found := this.ParseOS(userAgentString)
 	if found {
 		userAgent.OS = os
+	} else {
+		userAgent.OS = &OS{
+			Family: "Other",
+		}
 	}
 
 	device, found := this.ParseDevice(userAgentString)
 	if found {
 		userAgent.Device = device
+	} else {
+		userAgent.Device = &Device{
+			Family: "Other",
+		}
 	}
+
+	// set cache locker
+	this.cacheLocker.Lock()
+	defer this.cacheLocker.Unlock()
+
+	// trim cache map to fixed size
+	if this.cacheMaxSize <= 0 {
+		this.cacheMaxSize = 102400
+	}
+	if len(this.cacheMap) >= this.cacheMaxSize {
+		removedSize := this.cacheMaxSize / 3
+		if removedSize > 0 {
+			for key, _ := range this.cacheMap {
+				removedSize --
+				if removedSize <= 0 {
+					break
+				}
+
+				delete(this.cacheMap, key)
+			}
+		}
+	}
+
+	// put into cache
+	this.cacheMap[userAgentString] = userAgent
 
 	return userAgent, true
 }
