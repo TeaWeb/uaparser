@@ -5,7 +5,8 @@ More faster than other implementations.
 ~~~go
 p, err := "/path/to/regexes.yaml")
 if err != nil {
-    t.Fatal(err)
+    log.Println(err.Error())
+    return
 }
 
 agent, found := p.Parse("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36")
