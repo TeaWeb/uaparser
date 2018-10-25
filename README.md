@@ -3,7 +3,7 @@ More faster than other implementations.
 
 ## Usage
 ~~~go
-p, err := "/path/to/regexes.yaml")
+p, err := uaparser.NewParser("/path/to/regexes.yaml")
 if err != nil {
     log.Println(err.Error())
     return
