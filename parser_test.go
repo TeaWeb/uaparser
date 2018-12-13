@@ -46,7 +46,7 @@ func TestParser_Parse_Cost(t *testing.T) {
 
 	count := 100000
 	p.cacheMaxSize = 50000
-	for i := 0; i < count; i ++ {
+	for i := 0; i < count; i++ {
 		r := rand.Int()
 		p.Parse("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.59 Safari/537.36 " + fmt.Sprintf("%d", r%12000))
 	}
@@ -67,4 +67,44 @@ func TestParser_Keywords(t *testing.T) {
 	//pattern := "(ESPN)[%20| ]+Radio/(\\d+)\\.(\\d+)\\.(\\d+) CFNetwork"
 	pattern := `(SE 2\.X) MetaSr (\d+)\.(\d+) map[family_replacement:Sogou Explorer`
 	t.Log(p.parseKeywordsFromPattern(pattern))
+}
+
+func TestParser_Wget(t *testing.T) {
+	userAgent := "Wget/1.0"
+
+	p, err := NewParser(os.Getenv("GOPATH") + "/src/github.com/TeaWeb/uaparser/regexes.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, found := p.ParseBrowser(userAgent)
+	if !found {
+		t.Log("not found")
+	} else {
+		t.Logf("%#v", b)
+	}
+
+	o, found := p.ParseOS(userAgent)
+	if !found {
+		t.Log("not found")
+	} else {
+		t.Logf("%#v", o)
+	}
+
+	d, found := p.ParseDevice(userAgent)
+	if !found {
+		t.Log("not found")
+	} else {
+		t.Logf("%#v", d)
+	}
+}
+
+func TestParser_Other(t *testing.T) {
+	userAgent := "Hello/1.0"
+
+	p, err := NewParser(os.Getenv("GOPATH") + "/src/github.com/TeaWeb/uaparser/regexes.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, found := p.Parse(userAgent)
+	t.Log(b, found)
 }

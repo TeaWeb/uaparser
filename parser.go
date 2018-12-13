@@ -177,8 +177,8 @@ func (this *Parser) Parse(userAgentString string) (userAgent *UserAgent, found b
 	if len(this.cacheMap) >= this.cacheMaxSize {
 		removedSize := this.cacheMaxSize / 3
 		if removedSize > 0 {
-			for key, _ := range this.cacheMap {
-				removedSize --
+			for key := range this.cacheMap {
+				removedSize--
 				if removedSize <= 0 {
 					break
 				}
@@ -199,6 +199,7 @@ func (this *Parser) ParseBrowser(userAgentString string) (browser *Browser, foun
 		browser = &Browser{}
 		browser.Parse(matches, spec)
 	})
+
 	return
 }
 
@@ -241,7 +242,7 @@ func (this *Parser) parseUserAgentKeywords(userAgentString string, keywordsMappi
 		if !found {
 			continue
 		}
-		patterns = append(patterns, patternsArray ...)
+		patterns = append(patterns, patternsArray...)
 		foundKeywords = true
 	}
 	if foundKeywords {
