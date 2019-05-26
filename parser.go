@@ -5,12 +5,9 @@ import (
 	"io/ioutil"
 	"regexp"
 	"sort"
-	"strings"
-	"sync"
 )
 
 var replacementReg = regexp.MustCompile(`\$\d`)
-var keywordReg = regexp.MustCompile(`[a-zA-Z]+`)
 
 type UserAgent struct {
 	Device  *Device  `json:"device"`
@@ -28,10 +25,6 @@ type Parser struct {
 	browserKeywords map[string][]interface{} // keyword => [ reg, spec ]
 	osKeywords      map[string][]interface{} // keyword => [ reg, spec ]
 	deviceKeywords  map[string][]interface{} // keyword => [ reg, spec ]
-
-	cacheMaxSize int
-	cacheMap     map[string]*UserAgent
-	cacheLocker  *sync.Mutex
 }
 
 func NewParser(path string) (*Parser, error) {
@@ -44,10 +37,6 @@ func NewParser(path string) (*Parser, error) {
 		browserKeywords: map[string][]interface{}{},
 		osKeywords:      map[string][]interface{}{},
 		deviceKeywords:  map[string][]interface{}{},
-
-		cacheMaxSize: 100000,
-		cacheMap:     map[string]*UserAgent{},
-		cacheLocker:  &sync.Mutex{},
 	}
 
 	err := p.init()
@@ -125,20 +114,7 @@ func (this *Parser) init() (err error) {
 	return nil
 }
 
-func (this *Parser) SetCacheMaxSize(maxSize int) {
-	this.cacheMaxSize = maxSize
-}
-
 func (this *Parser) Parse(userAgentString string) (userAgent *UserAgent, found bool) {
-	// try to read from cache
-	this.cacheLocker.Lock()
-	cachedResult, ok := this.cacheMap[userAgentString]
-	if ok {
-		this.cacheLocker.Unlock()
-		return cachedResult, true
-	}
-	this.cacheLocker.Unlock()
-
 	// parse
 	browser, found := this.ParseBrowser(userAgentString)
 	if !found {
@@ -165,31 +141,6 @@ func (this *Parser) Parse(userAgentString string) (userAgent *UserAgent, found b
 			Family: "Other",
 		}
 	}
-
-	// set cache locker
-	this.cacheLocker.Lock()
-	defer this.cacheLocker.Unlock()
-
-	// trim cache map to fixed size
-	if this.cacheMaxSize <= 0 {
-		this.cacheMaxSize = 102400
-	}
-	if len(this.cacheMap) >= this.cacheMaxSize {
-		removedSize := this.cacheMaxSize / 3
-		if removedSize > 0 {
-			for key := range this.cacheMap {
-				removedSize--
-				if removedSize <= 0 {
-					break
-				}
-
-				delete(this.cacheMap, key)
-			}
-		}
-	}
-
-	// put into cache
-	this.cacheMap[userAgentString] = userAgent
 
 	return userAgent, true
 }
@@ -220,15 +171,21 @@ func (this *Parser) ParseDevice(userAgentString string) (device *Device, found b
 }
 
 func (this *Parser) parseKeywordsFromPattern(pattern string) []string {
-	pattern = strings.Replace(pattern, "$", " ", -1)
-	pattern = strings.Replace(pattern, "\\d", " ", -1)
-	pattern = strings.ToLower(pattern)
 	results := []string{}
-	for _, s := range keywordReg.FindAllString(pattern, -1) {
-		if len(s) <= 2 {
-			continue
+
+	// 为了加快速度不使用正则
+	last := []rune{}
+	for _, c := range pattern {
+		if c >= 'a' && c <= 'z' {
+			last = append(last, c)
+		} else if c >= 'A' && c <= 'Z' {
+			last = append(last, c+'a'-'A')
+		} else {
+			if len(last) > 2 {
+				results = append(results, string(last))
+			}
+			last = []rune{}
 		}
-		results = append(results, s)
 	}
 	return results
 }
@@ -245,6 +202,7 @@ func (this *Parser) parseUserAgentKeywords(userAgentString string, keywordsMappi
 		patterns = append(patterns, patternsArray...)
 		foundKeywords = true
 	}
+
 	if foundKeywords {
 		sort.Slice(patterns, func(i, j int) bool {
 			return patterns[i].([]interface{})[2].(int) < patterns[j].([]interface{})[2].(int)
